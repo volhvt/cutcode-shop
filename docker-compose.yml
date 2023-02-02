@@ -1,0 +1,9 @@
+#docker-compose.yml (Base)
+version: '3.7'
+
+networks:
+  net:
+    driver: "${NETWORKS_DRIVER}"
+    ipam:
+      config:
+        - subnet: "${NETWORK}"

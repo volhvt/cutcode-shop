@@ -1,0 +1,169 @@
+map $sent_http_content_type $expires {
+    "text/html" epoch;
+    "text/html; charset=utf-8"  epoch;
+    default off;
+}
+
+upstream php-upstream {
+  ${NGINX_PHP_UPSTREAM}
+}
+
+server {
+    # for local
+    server_name ${NGINX_HOST};
+
+    listen ${NGINX_PORT} default_server;
+    listen [::]:${NGINX_PORT} default_server;
+
+#    # For https
+#    listen ${NGINX_HTTPS_PORT} default_server ssl http2 ipv6only=on;
+#    listen [::]:${NGINX_HTTPS_PORT} ssl default_server http2 ipv6only=on;
+#    ssl_certificate /etc/nginx/ssl/default.crt;
+#    ssl_certificate_key /etc/nginx/ssl/default.key;
+#    ssl_dhparam         /etc/nginx/ssl_tmp/dhparam.pem;
+#    #ssl_session_ticket_key /etc/nginx/ssl/current.key;
+#    #ssl_session_ticket_key /etc/nginx/ssl/prev.key;
+#    #ssl_session_ticket_key /etc/nginx/ssl/prevprev.key;
+
+    access_log /dev/stdout;
+    error_log /dev/stderr;
+
+    #gzip on;
+    #gzip_types  text/plain application/xml text/css application/javascript;
+    #gzip_min_length 1000;
+
+    root /var/www/public;
+    index index.php index.html index.htm;
+
+    charset utf-8;
+    client_max_body_size 100M;
+    fastcgi_read_timeout 1800;
+
+    # cors configuration
+    # whitelist of allowed domains, via a regular expression
+    if ($http_origin ~* (http(s)?://localhost(:[0-9]+)?)) {
+    #if ($http_origin ~* .*) { # yeah, for local development. tailor your regex as needed
+         set $cors "true";
+    }
+
+    # apparently, the following three if statements create a flag for "compound conditions"
+    if ($request_method = OPTIONS) {
+        set $cors "${cors}options";
+    }
+
+    if ($request_method = GET) {
+        set $cors "${cors}get";
+    }
+
+    if ($request_method = POST) {
+        set $cors "${cors}post";
+    }
+
+    #add_header Content-Security-Policy-Report-Only "default-src https:; script-src https: 'unsafe-eval' 'unsafe-inline'; style-src https: 'unsafe-inline'; img-src https: data:; font-src https: data:; report-uri /csp-report";
+    add_header Strict-Transport-Security "max-age=63072000; includeSubdomains; preload";
+    add_header X-Frame-Options "DENY";
+
+    location = /system/healthcheck {
+      return 200 'ok';
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico)$ {
+        expires       max;
+        log_not_found off;
+        access_log    off;
+    }
+
+    # Represents the root of the domain
+    # http://localhost:8000/[index.php]
+    location / {
+        expires $expires;
+        proxy_redirect off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Request-Id $connection-$connection_requests;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto  $scheme;
+        proxy_read_timeout 1m;
+        proxy_connect_timeout 1m;
+        # Matches URLS `$_GET['_url']`
+        try_files $uri $uri/ /index.php?_url=$uri&$args;
+    }
+
+    # When the HTTP request does not match the above
+    # and the file ends in .php
+    location ~ [^/]\.php(/|$) {
+
+        # try_files $uri =404;
+
+        # Ubuntu and PHP7.0-fpm in socket mode
+        # This path is dependent on the version of PHP install
+        # fastcgi_pass  unix:/var/run/php/php7.0-fpm.sock;
+
+
+        # Alternatively you use PHP-FPM in TCP mode (Required on Windows)
+        # You will need to configure FPM to listen on a standard port
+        # https://www.nginx.com/resources/wiki/start/topics/examples/phpfastcgionwindows/
+        fastcgi_pass  php-upstream;
+
+        fastcgi_index /index.php;
+
+        include fastcgi_params;
+        fastcgi_split_path_info ^(.+?\.php)(/.*)$;
+        if (!-f $document_root$fastcgi_script_name) {
+            return 404;
+        }
+
+        fastcgi_param PATH_INFO       $fastcgi_path_info;
+        # fastcgi_param PATH_TRANSLATED $document_root$fastcgi_path_info;
+        # and set php.ini cgi.fix_pathinfo=0
+
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+
+        # now process the flag
+        if ($cors = 'trueget') {
+            add_header 'Access-Control-Allow-Origin' "$http_origin" always;
+            #add_header 'Access-Control-Allow-Origin' "*" always;
+            add_header 'Access-Control-Allow-Credentials' 'true' always;
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+            add_header 'Access-Control-Allow-Headers' 'Origin,Authorization,DNT,User-Agent,X-Requested-With,X-Access-Token,If-Modified-Since,Cache-Control,Range,Content-Type,Accept-Context-Site,Accept-Context-Market';
+            add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
+        }
+
+        if ($cors = 'truepost') {
+            add_header 'Access-Control-Allow-Origin' "$http_origin" always;
+            #add_header 'Access-Control-Allow-Origin' "*" always;
+            add_header 'Access-Control-Allow-Credentials' 'true' always;
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+            add_header 'Access-Control-Allow-Headers' 'Origin,Authorization,User-Agent,DNT,X-Requested-With,X-Access-Token,If-Modified-Since,Cache-Control,Range,Content-Type,Accept-Context-Site,Accept-Context-Market';
+            add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range';
+        }
+
+        if ($cors = 'trueoptions') {
+            add_header 'Access-Control-Allow-Origin' "$http_origin" always;
+            #add_header 'Access-Control-Allow-Origin' "*" always;
+            add_header 'Access-Control-Allow-Credentials' 'true' always;
+
+            add_header 'Access-Control-Max-Age' 1728000; # cache preflight value for 20 days
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+            add_header 'Access-Control-Allow-Headers' 'Origin,Authorization,Accept,User-Agent,DNT,Cache-Control,X-Mx-ReqToken,Keep-Alive,X-Requested-With,X-Access-Token,If-Modified-Since,Content-Type,Accept-Context-Site,Accept-Context-Market';
+
+            add_header 'Content-Length' 0;
+            add_header 'Content-Type' 'text/plain charset=UTF-8';
+            return 204;
+        }
+    }
+
+    location ~ /\.{
+        #access_log off;
+        #log_not_found off;
+        deny all;
+    }
+
+    location ~ /\.git {
+        deny all;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}

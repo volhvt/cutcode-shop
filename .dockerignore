@@ -1,0 +1,16 @@
+/.gitlab-ci.yml
+/.git
+.idea
+coverage
+data
+/docker-compose.*
+/Dockerfile*
+/docker
+#/environments
+/keys
+README.md
+/vendor
+/preload.php
+/sources/storage/app/public/*
+!/sources/storage/app/public/images/icon/*
+!/sources/storage/app/public/images/watermark.png

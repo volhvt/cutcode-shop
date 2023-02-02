@@ -1,0 +1,193 @@
+version: '3.7'
+
+networks:
+  web:
+    external: true
+  net:
+    driver: 'bridge'
+    ipam:
+      config:
+        - subnet: 173.51.0.0/16
+
+services:
+
+  mysql:
+    container_name: "${NAME}_mysql"
+    hostname: "${NAME}-mysql"
+    build:
+      context: "${DOCKER_PATH}/mysql"
+      args:
+        - MYSQL_VERSION=${DB_VERSION}
+        - ENVIRONMENT=${ENVIRONMENT}
+    environment:
+      - docker=true
+      - MYSQL_DATABASE=${DB_DATABASE}
+      - MYSQL_USER=${DB_USERNAME}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - TZ=${TIMEZONE_DEFAULT}
+    volumes:
+      - ${DATA_PATH}/mysql:/var/lib/mysql
+      - ${DATA_LOG_PATH}${DB_LOG_PATH}:/var/log/mysql
+      - ${DB_ENTRYPOINT_INITDB}:/docker-entrypoint-initdb.d
+    labels:
+      - traefik.enable=false
+    ports:
+      - "${DB_PORT}:3306"
+    networks:
+      - net
+
+  php-fpm:
+    container_name: "${APP_NAME}_php_fpm"
+    hostname: "${APP_NAME}-php-fpm"
+    environment:
+      docker: "true"
+    volumes:
+      - ${DATA_KEYS_PATH}/.ssh:/root/.ssh${CONTAINER_CODE_FLAG}
+      - ${DATA_STORAGE_PATH}:/var/www/storage${CONTAINER_CODE_FLAG}
+      - ${DATA_LOG_PATH}${PHP_FPM_LOG_PATH}:/var/log/php
+      - ${PHP_FPM_CONFIG_PATH}php.ini:/usr/local/etc/php/php.ini
+      - ${PHP_FPM_CONFIG_PATH}www.conf:/usr/local/etc/php-fpm.d/www.conf
+      - ${PHP_FPM_CONFIG_PATH}ssmtp/ssmtp.conf:/etc/ssmtp/ssmtp.conf
+      - ${CODE_PATH}:${CONTAINER_CODE_PATH}${CONTAINER_CODE_FLAG}
+    build:
+      context: "${DOCKER_PATH}/php-fpm"
+      args:
+        - INSTALL_FAKETIME=false
+        - INSTALL_PHPDBG=false
+        - INSTALL_XDEBUG=false
+        - INSTALL_LOCALES_ADDITIONAL=false
+        - INSTALL_XHPROF=false
+        - LOCALES_ADDITIONAL=${LOCALES_ADDITIONAL}
+        - LOCALE=${LOCALE_DEFAULT}
+        - TIMEZONE=${TIMEZONE_DEFAULT}
+        - http_proxy
+        - https_proxy
+        - no_proxy
+        - PUID=${PUID}
+        - PGID=${PGID}
+        - SSH_PRIVATE_KEY="${SSH_PRIVATE_KEY}"
+        - ENVIRONMENT=${APP_ENV}
+    expose:
+      - "9000"
+    depends_on:
+      - mysql
+    networks:
+      - net
+
+  scheduler:
+    container_name: "${APP_NAME}_scheduler"
+    hostname: "${APP_NAME}-scheduler"
+    environment:
+      docker: "true"
+      CONTAINER_ROLE: "scheduler"
+    volumes:
+      - ${DATA_KEYS_PATH}/.ssh:/root/.ssh${CONTAINER_CODE_FLAG}
+      - ${DATA_STORAGE_PATH}:/var/www/storage${CONTAINER_CODE_FLAG}
+      - ${DATA_LOG_PATH}${PHP_CLI_LOG_PATH}:/var/log/php
+      - ${PHP_CLI_CONFIG_PATH}php.ini:/usr/local/etc/php/php.ini
+      - ${PHP_CLI_CONFIG_PATH}ssmtp/ssmtp.conf:/etc/ssmtp/ssmtp.conf
+      - ${CODE_PATH}:${CONTAINER_CODE_PATH}${CONTAINER_CODE_FLAG}
+    build:
+      context: "${DOCKER_PATH}/php-cli"
+      args:
+        - INSTALL_FAKETIME=false
+        - INSTALL_PHPDBG=false
+        - INSTALL_XDEBUG=false
+        - INSTALL_LOCALES_ADDITIONAL=false
+        - INSTALL_XHPROF=false
+        - LOCALES_ADDITIONAL=${LOCALES_ADDITIONAL}
+        - LOCALE=${LOCALE_DEFAULT}
+        - TIMEZONE=${TIMEZONE_DEFAULT}
+        - http_proxy
+        - https_proxy
+        - no_proxy
+        - PUID=${PUID}
+        - PGID=${PGID}
+        - SSH_PRIVATE_KEY="${SSH_PRIVATE_KEY}"
+        - ENVIRONMENT=${APP_ENV}
+    depends_on:
+      - mysql
+    networks:
+      - net
+
+  queue:
+    container_name: "${APP_NAME}_queue"
+    hostname: "${APP_NAME}-queue"
+    environment:
+      docker: "true"
+      CONTAINER_ROLE: "queue"
+    volumes:
+      - ${DATA_KEYS_PATH}/.ssh:/root/.ssh${CONTAINER_CODE_FLAG}
+      - ${DATA_STORAGE_PATH}:/var/www/storage${CONTAINER_CODE_FLAG}
+      - ${DATA_LOG_PATH}${PHP_CLI_LOG_PATH}:/var/log/php
+      - ${PHP_CLI_CONFIG_PATH}php.ini:/usr/local/etc/php/php.ini
+      - ${PHP_CLI_CONFIG_PATH}ssmtp/ssmtp.conf:/etc/ssmtp/ssmtp.conf
+      - ${CODE_PATH}:${CONTAINER_CODE_PATH}${CONTAINER_CODE_FLAG}
+    build:
+      context: "${DOCKER_PATH}/php-cli"
+      args:
+        - INSTALL_FAKETIME=false
+        - INSTALL_PHPDBG=false
+        - INSTALL_XDEBUG=false
+        - INSTALL_LOCALES_ADDITIONAL=false
+        - INSTALL_XHPROF=false
+        - LOCALES_ADDITIONAL=${LOCALES_ADDITIONAL}
+        - LOCALE=${LOCALE_DEFAULT}
+        - TIMEZONE=${TIMEZONE_DEFAULT}
+        - http_proxy
+        - https_proxy
+        - no_proxy
+        - PUID=${PUID}
+        - PGID=${PGID}
+        - SSH_PRIVATE_KEY="${SSH_PRIVATE_KEY}"
+        - ENVIRONMENT=${APP_ENV}
+    depends_on:
+      - mysql
+    networks:
+      - net
+
+  node:
+    container_name: "${APP_NAME}_node"
+    hostname: "${APP_NAME}-node"
+    build:
+      context: "${DOCKER_PATH}/node"
+    volumes:
+      - ${CODE_PATH}:/var/www/${CONTAINER_CODE_FLAG}
+    ports:
+      - "5005:5005"
+      - "5175:5175"
+    networks:
+      - net
+
+  nginx:
+    container_name: "${APP_NAME}_nginx"
+    hostname: "${APP_NAME}_nginx"
+    build:
+      context: "${DOCKER_PATH}/nginx"
+      args:
+        - INSTALL_LOCALES_ADDITIONAL=false
+        - LOCALES_ADDITIONAL=${LOCALES_ADDITIONAL}
+        - LOCALE=${LOCALE_DEFAULT}
+        - TIMEZONE=${TIMEZONE_DEFAULT}
+        - PHP_UPSTREAM_CONTAINER=${PHP_FPM_UPSTREAM_CONTAINER}
+        - PHP_UPSTREAM_PORT=${PHP_FPM_UPSTREAM_PORT}
+        - http_proxy
+        - https_proxy
+        - no_proxy
+        - PUID=${PUID}
+        - PGID=${PGID}
+        - ENVIRONMENT=${APP_ENV}
+    volumes:
+      - ${DATA_LOG_PATH}${NGINX_LOG_PATH}:/var/log/nginx
+      - ${DATA_PATH}${NGINX_SSL_PATH}:/etc/nginx/ssl
+      - ${NGINX_SITES_PATH}:/etc/nginx/sites-available
+      - ${CODE_PATH}:${CONTAINER_CODE_PATH}${CONTAINER_CODE_FLAG}
+      - ${DATA_STORAGE_PATH}:/var/www/storage${CONTAINER_CODE_FLAG}
+    ports:
+      - "${HTTP_PORT}:80"
+      - "${HTTPS_PORT}:443"
+    depends_on:
+      - php-fpm
+    networks:
+      - net
