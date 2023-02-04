@@ -22,8 +22,7 @@ return new class extends Migration {
             $table->unsignedInteger('price')
                 ->comment('цена в копейках');
             $table->foreignIdFor(Brand::class)
-                ->nullable()
-                ->default(null)
+                ->nullable()->default(null)
                 ->constrained()
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
@@ -36,7 +35,7 @@ return new class extends Migration {
         });
 
         Schema::create('category_product', static function (Blueprint $table) {
-            $table->id();
+            //$table->id();
             $table->foreignIdFor(Product::class)
                 ->constrained()
                 ->cascadeOnUpdate()

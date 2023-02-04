@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Traits\Models\HasSlug;
+use App\Traits\Models\HasUniqueSlug;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -27,8 +27,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  */
 class Product extends Model
 {
-    use HasFactory, HasSlug;
-
+    use HasFactory, HasUniqueSlug;
     protected $fillable = ['brand_id', 'price', 'title', 'slug', 'thumbnail'];
 
     protected $dates = ['created_at', 'updated_at'];
