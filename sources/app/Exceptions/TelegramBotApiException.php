@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Exceptions;
 
-class TelegramLoggerBotApiException extends \Exception
+class TelegramBotApiException extends \Exception
 {
 
 }

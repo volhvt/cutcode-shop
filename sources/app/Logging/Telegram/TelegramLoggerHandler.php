@@ -3,11 +3,9 @@ declare(strict_types=1);
 
 namespace App\Logging\Telegram;
 
-use App\Exceptions\TelegramLoggerBotApiException;
 use App\Services\Telegram\TelegramBotApi;
 use http\Exception\RuntimeException;
-use Illuminate\Http\Client\RequestException;
-use  Monolog\Handler\AbstractProcessingHandler;
+use Monolog\Handler\AbstractProcessingHandler;
 use Monolog\Logger;
 
 class TelegramLoggerHandler extends AbstractProcessingHandler
@@ -37,14 +35,9 @@ class TelegramLoggerHandler extends AbstractProcessingHandler
     /**
      * @param array $record
      * @return void
-     * @throws TelegramLoggerBotApiException
      */
     protected function write(array $record): void
     {
-        try {
-            TelegramBotApi::sendMessage($this->token, $this->chatId, $record['formatted']);
-        } catch (RequestException $e) {
-            throw new TelegramLoggerBotApiException($e->getMessage());
-        }
+        TelegramBotApi::sendMessage($this->token, $this->chatId, $record['formatted']);
     }
 }

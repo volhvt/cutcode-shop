@@ -3,9 +3,11 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Components\Fakers\FakerImageProvider;
 use App\Http\Kernel;
 use Carbon\CarbonInterval;
-use Illuminate\Database\Connection;
+use Faker\Factory;
+use Faker\Generator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Request;
@@ -25,6 +27,12 @@ class AppServiceProvider extends ServiceProvider
     {
         //
         Telescope::ignoreMigrations();
+        if (!$this->app->isProduction()) {
+            $this->app->singleton(Generator::class, static function () {
+                ($faker = Factory::create())->addProvider(new FakerImageProvider($faker));
+                return $faker;
+            });
+        }
     }
 
     /**
@@ -34,22 +42,30 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Model::preventLazyLoading(!app()->isProduction());
-        Model::preventSilentlyDiscardingAttributes(!app()->isProduction());
-        DB::whenQueryingForLongerThan(
-            CarbonInterval::seconds(1),
-            static function(Connection $connection, QueryExecuted $queryExecuted) {
+        Model::shouldBeStrict(!app()->isProduction());
+
+//        DB::whenQueryingForLongerThan(
+//            CarbonInterval::seconds(1),
+//            static function (Connection $connection, QueryExecuted $queryExecuted) {
+//            }
+//        );
+
+
+        DB::listen(static function (QueryExecuted $query) {
+            if ($query->time > 700) {
                 logger()
                     ->channel('telegram')
-                    ->debug('whenQueryingForLongerThan : ' . $connection->query()->toSql());
+                    ->debug(
+                        'slow query : '. $query->time .' ms | ' . $query->sql . ' ',
+                        $query->bindings
+                    );
             }
-        );
+        });
 
-        /** @var Kernel $kernel */
-        $kernel = app(Kernel::class);
-        $kernel->whenRequestLifecycleIsLongerThan(
+
+        app(Kernel::class)->whenRequestLifecycleIsLongerThan(
             CarbonInterval::seconds(3),
-            static function($startedAt, Request $request, Response $response) {
+            static function ($startedAt, Request $request, Response $response) {
                 logger()
                     ->channel('telegram')
                     ->debug('whenRequestLifecycleIsLongerThan : ' . $request->url());

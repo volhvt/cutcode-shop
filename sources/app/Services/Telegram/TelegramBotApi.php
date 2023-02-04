@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace App\Services\Telegram;
 
-use Illuminate\Http\Client\RequestException;
+use App\Exceptions\TelegramBotApiException;
 use Illuminate\Support\Facades\Http;
 
 final class TelegramBotApi
@@ -16,14 +16,18 @@ final class TelegramBotApi
      * @param int $chat_id
      * @param string $message
      * @return bool
-     * @throws RequestException
      */
     public static function sendMessage(string $token, int $chat_id, string $message): bool
     {
-        $response = Http::get(self::HOST . $token . '/sendMessage', [
-            'chat_id' => $chat_id,
-            'text' => $message
-        ])->throw();
-        return $response->json()['ok'];
+        try {
+            $response = Http::get(self::HOST . $token . '/sendMessage', [
+                'chat_id' => $chat_id,
+                'text' => $message
+            ])->throw();
+            return $response->json()['ok'] ?? false;
+        } catch (\Throwable $e) {
+            report(new TelegramBotApiException($e->getMessage()));
+        }
+        return false;
     }
 }
